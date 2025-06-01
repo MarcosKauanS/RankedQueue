@@ -1,11 +1,11 @@
 require('dotenv').config();
 
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, ChannelType } = require('discord.js');
 
-const ID_CHANNEL = process.env.ID_CHANNEL;
-const ID_REGISTER_CHANNEL = process.env.ID_REGISTER_CHANNEL;
-const ID_REGISTER_ROLE = process.env.ID_REGISTER_ROLE;
-
+const CHANNEL_ID = process.env.CHANNEL_ID;
+const REGISTER_CHANNEL_ID = process.env.REGISTER_CHANNEL_ID;
+const REGISTER_ROLE_ID = process.env.REGISTER_ROLE_ID;
+const GUILD_ID = process.env.GUILD_ID
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -20,14 +20,69 @@ client.once('ready', () => {
   console.log(`🤖 Bot conectado como ${client.user.tag}`);
 });
 
+let memberCall = 0;
+let gameNumber = 0
+
 client.on('voiceStateUpdate', (oldState, newState) => {
 
+  
   if(!oldState.channel && newState.channel) {
     console.log(`${newState.member.user.tag} entrou no canal de voz ${newState.channel.name}`);
+    memberCall += 1;
+    console.log(memberCall);
   }
 
   else if(oldState.channel && !newState.channel) {
     console.log(`${oldState.member.user.tag} saiu do canal de voz ${oldState.channel.name}`);
+    if(memberCall < 0 ) {
+      memberCall = 0;
+      console.log(memberCall);
+    }else {
+     memberCall -= 1;
+     console.log(memberCall);
+    }
+  }
+
+  if(memberCall == 2) {
+    const guild = client.guilds.cache.get(ID_GUILD);
+    const voiceChannel = guild.channels.cache.get(ID_CHANNEL);
+
+    const membersInCall = Array.from(voiceChannel.members.values());
+
+    for (let i = membersInCall.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+
+      [membersInCall[i], membersInCall[j]] = [membersInCall[j], membersInCall[i]];
+    }
+
+    const middleIndex = Math.ceil(membersInCall.length / 2);
+    const team1 = membersInCall.slice(0, middleIndex);
+    const team2 = membersInCall.slice(middleIndex);
+
+    const team1Mentions = team1.map(member => `<@${member.id}>`).join(' ');
+    const team2Mentions = team2.map(member => `<@${member.id}>`).join(' ');
+
+    gameNumber += 1;
+
+    guild.channels.create( {
+      name: `JOGO #${gameNumber}`, 
+      type: ChannelType.GuildText
+    }).then(channel => {
+      channel.send(`${team1Mentions}`);
+      channel.send(`${team2Mentions}`);
+    });
+
+    guild.channels.create({
+      name: `JOGO #${gameNumber} [Time 1]`,
+      type: ChannelType.GuildVoice
+    });
+
+    guild.channels.create({
+      name: `JOGO #${gameNumber} [Time 2]`,
+      type: ChannelType.GuildVoice
+    });
+
+    memberCall = 0;
   }
 });
 
