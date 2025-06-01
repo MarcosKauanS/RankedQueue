@@ -1,11 +1,10 @@
-//Importando biblioteca dotenv
 require('dotenv').config();
 
-//Importando biblioteca do discord
 const { Client, GatewayIntentBits } = require('discord.js');
 
-//Importando id do canal
 const ID_CHANNEL = process.env.ID_CHANNEL;
+const ID_REGISTER_CHANNEL = process.env.ID_REGISTER_CHANNEL;
+const ID_REGISTER_ROLE = process.env.ID_REGISTER_ROLE;
 
 const client = new Client({
   intents: [
@@ -13,28 +12,56 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers
   ],
 });
 
-//Evento que verifica se o bot está pronto
 client.once('ready', () => {
   console.log(`🤖 Bot conectado como ${client.user.tag}`);
 });
 
-//Evento que verifica atualizações em canais de voz
-    client.on('voiceStateUpdate', (oldState, newState) => {
-        
-        //Verificação se um usuário entrou em um canal de voz
-        if(!oldState.channel && newState.channel) {
-            console.log(`${newState.member.user.tag} entrou no canal de voz ${newState.channel.name}`);
-        }
+client.on('voiceStateUpdate', (oldState, newState) => {
 
-        //Verificação se um usuário saiu de um canal de voz
-        else if(oldState.channel && !newState.channel) {
-            console.log(`${oldState.member.user.tag} saiu do canal de voz ${oldState.channel.name}`);
-        }
-    })
+  if(!oldState.channel && newState.channel) {
+    console.log(`${newState.member.user.tag} entrou no canal de voz ${newState.channel.name}`);
+  }
+
+  else if(oldState.channel && !newState.channel) {
+    console.log(`${oldState.member.user.tag} saiu do canal de voz ${oldState.channel.name}`);
+  }
+});
+
+client.on('messageCreate', async(message) => {
+  if(message.author.bot) return;
+
+  if(message.channel.id !== ID_REGISTER_CHANNEL) return;
+  
+  if(message.content == '!registrar') {
+    try {
+      const role = message.guild.roles.cache.get(ID_REGISTER_ROLE);
+      const username = message.member.user.username;
+      const elo = 0;
+      const newUsername = `[${elo}]${username}`;
+
+      if(message.member.id == message.guild.ownerId) {
+        return message.reply("Não posso modificar o apelido do dono do servidor")
+      }
+
+      if(!role) {
+        return message.reply("Cargo de registro não encontrado");
+      
+      } else {
+        await message.member.roles.add(role);
+
+        await message.member.setNickname(newUsername);
+
+        await message.reply("Você foi registrado");
+      }
+    }catch(error) {
+      console.error(error);
+      message.reply("Ocorreu um erro ao tentar registrar você")
+    }
+  }
+});
     
-
-//Conectando ao bot discord
 client.login(process.env.DISCORD_TOKEN);
