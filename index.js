@@ -6,6 +6,7 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 const REGISTER_CHANNEL_ID = process.env.REGISTER_CHANNEL_ID;
 const REGISTER_ROLE_ID = process.env.REGISTER_ROLE_ID;
 const GUILD_ID = process.env.GUILD_ID
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -44,8 +45,8 @@ client.on('voiceStateUpdate', (oldState, newState) => {
   }
 
   if(memberCall == 2) {
-    const guild = client.guilds.cache.get(ID_GUILD);
-    const voiceChannel = guild.channels.cache.get(ID_CHANNEL);
+    const guild = client.guilds.cache.get(GUILD_ID);
+    const voiceChannel = guild.channels.cache.get(CHANNEL_ID);
 
     const membersInCall = Array.from(voiceChannel.members.values());
 
@@ -89,11 +90,11 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 client.on('messageCreate', async(message) => {
   if(message.author.bot) return;
 
-  if(message.channel.id !== ID_REGISTER_CHANNEL) return;
+  if(message.channel.id !== REGISTER_CHANNEL_ID) return;
   
   if(message.content == '!registrar') {
     try {
-      const role = message.guild.roles.cache.get(ID_REGISTER_ROLE);
+      const role = message.guild.roles.cache.get(REGISTER_ROLE_ID);
       const username = message.member.user.username;
       const elo = 0;
       const newUsername = `[${elo}]${username}`;
@@ -117,6 +118,12 @@ client.on('messageCreate', async(message) => {
       message.reply("Ocorreu um erro ao tentar registrar você")
     }
   }
+});
+
+client.on('interactionCreate', async interaction => {
+  const command = client.commands.get(interaction.commandName);
+  
+  await command.execute(interaction);
 });
     
 client.login(process.env.DISCORD_TOKEN);
