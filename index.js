@@ -1,10 +1,10 @@
 require('dotenv').config();
 
-const { Client, GatewayIntentBits, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, ChannelType, Events} = require('discord.js');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const REGISTER_CHANNEL_ID = process.env.REGISTER_CHANNEL_ID;
-const REGISTER_ROLE_ID = process.env.REGISTER_ROLE_ID;
 const GUILD_ID = process.env.GUILD_ID
 
 const client = new Client({
@@ -13,10 +13,21 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
   ],
 });
+
+client.commands = new Collection();
+
+const commandsPath = path.join(__dirname, 'commands');
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+for(const file of commandFiles) {
+  const command = require(`./commands/${file}`);
+  if('data' in command && 'execute' in command) {
+    client.commands.set(command.data.name, command);
+  }
+}
 
 client.once('ready', () => {
   console.log(`🤖 Bot conectado como ${client.user.tag}`);
@@ -85,39 +96,6 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     });
 
     memberCall = 0;
-  }
-});
-
-client.on('messageCreate', async(message) => {
-  if(message.author.bot) return;
-
-  if(message.channel.id !== REGISTER_CHANNEL_ID) return;
-  
-  if(message.content == '!registrar') {
-    try {
-      const role = message.guild.roles.cache.get(REGISTER_ROLE_ID);
-      const username = message.member.user.username;
-      const elo = 0;
-      const newUsername = `[${elo}]${username}`;
-
-      if(message.member.id == message.guild.ownerId) {
-        return message.reply("Não posso modificar o apelido do dono do servidor")
-      }
-
-      if(!role) {
-        return message.reply("Cargo de registro não encontrado");
-      
-      } else {
-        await message.member.roles.add(role);
-
-        await message.member.setNickname(newUsername);
-
-        await message.reply("Você foi registrado");
-      }
-    }catch(error) {
-      console.error(error);
-      message.reply("Ocorreu um erro ao tentar registrar você")
-    }
   }
 });
 
