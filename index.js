@@ -3,6 +3,8 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Collection, ChannelType, Events} = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
+const {token, prefix} = require('./config/config');
+const connection = require('./database/connection')
 
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const GUILD_ID = process.env.GUILD_ID
