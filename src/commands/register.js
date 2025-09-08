@@ -39,18 +39,18 @@ module.exports = {
 
       // Proteção: não permite alterar o nickname do dono do servidor
       if (interaction.member.id === interaction.guild.ownerId) {
-        return interaction.reply("❌ Não posso modificar o apelido do dono do servidor.");
+        return interaction.reply("Não posso modificar o apelido do dono do servidor.");
       }
 
       // Verifica se o usuário já está registrado no banco
       const existingUser = await db.getUser(userId);
       if (existingUser) {
-        return interaction.reply("⚠️ Você já está registrado!");
+        return interaction.reply("Você já está registrado!");
       }
 
       // Verifica se o cargo existe
       if (!role) {
-        return interaction.reply("❌ Cargo de registro não encontrado.");
+        return interaction.reply("Cargo de registro não encontrado.");
       }
 
       // Adiciona o cargo, define nickname e salva no banco
@@ -59,11 +59,11 @@ module.exports = {
       await db.addUser(userId, username, elo);
 
       // Confirmação para o usuário
-      await interaction.reply("✅ Você foi registrado com sucesso!");
+      await interaction.reply("Você foi registrado com sucesso!");
 
     } catch (error) {
       console.error('Erro ao registrar usuário:', error);
-      await interaction.reply("❌ Ocorreu um erro ao tentar registrar você.");
+      await interaction.reply("Ocorreu um erro ao tentar registrar você.");
     }
   },
 };
