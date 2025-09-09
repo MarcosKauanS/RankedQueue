@@ -8,10 +8,11 @@ async function updateDiscordRole(client, guildId, discordId, elo) {
   const guild = await client.guilds.fetch(guildId);
   const member = await guild.members.fetch(discordId);
 
-  let playerTier = tiers[tiers.length - 1]; // maior tier por padrão
+  // Pega o maior tier cujo elo seja menor ou igual ao elo atual
+  let playerTier = tiers[0];
   for (const tier of tiers) {
-    if (elo < tier.elo) break;
-    playerTier = tier;
+    if (elo >= tier.elo) playerTier = tier;
+    else break;
   }
 
   // Remove cargos antigos
@@ -21,7 +22,7 @@ async function updateDiscordRole(client, guildId, discordId, elo) {
     await member.roles.remove(rolesToRemove);
   }
 
-  // Adiciona cargo do tier atual
+  // Adiciona cargo novo
   let role = guild.roles.cache.find(r => r.name === playerTier.name);
   if (!role) {
     role = await guild.roles.create({
@@ -56,7 +57,7 @@ class Database {
         id INT AUTO_INCREMENT PRIMARY KEY,
         discord_id VARCHAR(30) NOT NULL UNIQUE,
         username VARCHAR(100) NOT NULL,
-        elo INT DEFAULT 1000,
+        elo INT DEFAULT 0,
         daily_elo INT DEFAULT 0,
         wins INT DEFAULT 0,
         losses INT DEFAULT 0,
@@ -71,7 +72,7 @@ class Database {
     console.log('Tabela "users" criada ou já existe!');
   }
 
-  async addUser(discordId, username, elo = 1000) {
+  async addUser(discordId, username, elo = 0) {
     const query = 'INSERT IGNORE INTO users (discord_id, username, elo) VALUES (?, ?, ?)';
     await this.connection.execute(query, [discordId, username, elo]);
   }
@@ -86,18 +87,16 @@ class Database {
 
   async updatePlayerStats(discordId, { vitoria = false, mvp = false, derrota = false }, client = null, guildId = null) {
     const user = await this.getUser(discordId);
-    if (!user) return;
+    if (!user) return 0;
 
-    let currentTier = tiers[0];
-    for (const tier of tiers) {
-      if (user.elo >= tier.eloWin) currentTier = tier;
-      else break;
-    }
+    // Pega o tier atual
+    const currentTierName = this.getTierByElo(user.elo);
+    const tierObj = tiers.find(t => t.name === currentTierName);
 
     let eloChange = 0;
-    if (vitoria) eloChange += currentTier.eloWin;
-    if (mvp) eloChange += currentTier.eloMVP;
-    if (derrota) eloChange -= currentTier.eloLoss;
+    if (vitoria) eloChange += tierObj.eloWin;
+    if (mvp) eloChange += tierObj.eloMVP;
+    if (derrota) eloChange -= tierObj.eloLoss;
 
     const newElo = Math.max(user.elo + eloChange, 0);
     const wins = vitoria ? user.wins + 1 : user.wins;
@@ -131,11 +130,10 @@ class Database {
     console.log('Tabela "games" criada ou já existe!');
   }
 
-  // Adiciona um jogo e retorna o id gerado como gameNumber
   async addGame(time1, time2) {
     const query = 'INSERT INTO games (time1, time2) VALUES (?, ?)';
     const [result] = await this.connection.execute(query, [JSON.stringify(time1), JSON.stringify(time2)]);
-    return result.insertId; // id gerado usado como gameNumber
+    return result.insertId;
   }
 
   async getGameByNumber(gameNumber) {
@@ -167,9 +165,10 @@ class Database {
   }
 
   getTierByElo(elo) {
-    let tier = tiers[0];
-    for (const t of tiers) {
-      if (elo >= t.eloWin) tier = t;
+    const sorted = tiers.sort((a, b) => a.elo - b.elo);
+    let tier = sorted[0];
+    for (const t of sorted) {
+      if (elo >= t.elo) tier = t;
       else break;
     }
     return tier.name;

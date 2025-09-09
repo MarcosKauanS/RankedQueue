@@ -16,24 +16,40 @@ module.exports = {
         .addChoices(
           { name: 'Time 1', value: 'time1' },
           { name: 'Time 2', value: 'time2' },
-        )),
+        ))
+    .addUserOption(option =>
+      option.setName('mvp')
+        .setDescription('Escolha o jogador MVP do time vencedor')
+        .setRequired(false)), // opcional caso ninguém seja MVP
 
   async execute(interaction, db) {
+    // Defer para evitar "Unknown interaction"
+    await interaction.deferReply({ ephemeral: true });
+
     const gameNumber = interaction.options.getInteger('game');
     const vencedor = interaction.options.getString('vencedor');
+    const mvpUser = interaction.options.getUser('mvp'); // usuário MVP
 
     const jogo = await db.getGameByNumber(gameNumber);
-    if (!jogo) return interaction.reply({ content: `Jogo #${gameNumber} não encontrado.`, ephemeral: true });
+    if (!jogo) return interaction.editReply({ content: `Jogo #${gameNumber} não encontrado.` });
+
+    // --- Verifica se o jogo já foi scorado ---
+    if (jogo.winner) {
+      return interaction.editReply({
+        content: `O jogo #${gameNumber} já foi registrado com vencedor: ${jogo.winner === 'time1' ? 'Time 1' : 'Time 2'}.`
+      });
+    }
 
     const timeVencedor = vencedor === 'time1' ? jogo.time1 : jogo.time2;
     const timePerdedor = vencedor === 'time1' ? jogo.time2 : jogo.time1;
 
     if (!Array.isArray(timeVencedor) || !Array.isArray(timePerdedor)) {
-      return interaction.reply({ content: 'Erro: os times do jogo estão inválidos.', ephemeral: true });
+      return interaction.editReply({ content: 'Erro: os times do jogo estão inválidos.' });
     }
 
     const atualizarJogador = async (player, vitoria = false, derrota = false, mvp = false) => {
-      if (!player?.id) return; // Garante que existe ID
+      if (!player?.id) return;
+
       const newElo = await db.updatePlayerStats(player.id, { vitoria, derrota, mvp });
 
       const guildMember = await interaction.guild.members.fetch(player.id).catch(() => null);
@@ -57,15 +73,38 @@ module.exports = {
     };
 
     // Atualiza todos os jogadores
-    for (const player of timeVencedor) await atualizarJogador(player, true, false, player.mvp || false);
+    for (const player of timeVencedor) {
+      const isMVP = mvpUser && player.id === mvpUser.id;
+      await atualizarJogador(player, true, false, isMVP);
+    }
     for (const player of timePerdedor) await atualizarJogador(player, false, true, false);
 
     // Define vencedor do jogo
     await db.setGameWinner(gameNumber, vencedor);
 
-    // Resposta
-    await interaction.reply({
-      content: `🏆 Resultado registrado para o jogo #${gameNumber}!\n**Vencedores:** ${timeVencedor.map(p => `<@${p.id}>`).join(', ')}\n**Perdedores:** ${timePerdedor.map(p => `<@${p.id}>`).join(', ')}`
+    // Envia mensagem final
+    await interaction.editReply({
+      content: `🏆 Resultado registrado para o jogo #${gameNumber}!\n**Vencedores:** ${timeVencedor.map(p => `<@${p.id}>`).join(', ')}\n**Perdedores:** ${timePerdedor.map(p => `<@${p.id}>`).join(', ')}${mvpUser ? `\n🌟 MVP: <@${mvpUser.id}>` : ''}`
     });
+
+    // --- Cleanup dos canais após 3 segundos ---
+    setTimeout(async () => {
+      try {
+        const voice1 = interaction.guild.channels.cache.find(c => c.name === `JOGO #${gameNumber} [Time 1]`);
+        const voice2 = interaction.guild.channels.cache.find(c => c.name === `JOGO #${gameNumber} [Time 2]`);
+        const textChannel = interaction.guild.channels.cache.find(c => c.name === `jogo-${gameNumber}`);
+
+        if (voice1) await voice1.delete().catch(() => {});
+        if (voice2) await voice2.delete().catch(() => {});
+        if (textChannel) await textChannel.delete().catch(() => {});
+
+        console.log(`Canais do jogo #${gameNumber} removidos após scoragem.`);
+      } catch (err) {
+        console.error('Erro ao remover canais do jogo:', err);
+      }
+    }, 3000);
+
+    // Libera flag para novos jogos
+    interaction.guild.activeGame = false;
   }
 };

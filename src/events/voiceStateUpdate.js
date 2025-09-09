@@ -8,6 +8,7 @@ module.exports = {
     const CHANNEL_ID = config.CHANNEL_ID;
     const GUILD_ID = config.GUILD_ID;
 
+    // Ignora mudanças irrelevantes
     if (!oldState.channel && !newState.channel) return;
 
     const guild = client.guilds.cache.get(GUILD_ID);
@@ -18,7 +19,7 @@ module.exports = {
 
     const membersInCall = Array.from(voiceChannel.members.values());
 
-    // Log de entrada/saída
+    // Logs de entrada/saída
     if (!oldState.channel && newState.channel?.id === CHANNEL_ID) {
       console.log(`${newState.member.user.tag} entrou no canal de voz ${voiceChannel.name}`);
     }
@@ -26,9 +27,8 @@ module.exports = {
       console.log(`${oldState.member.user.tag} saiu do canal de voz ${voiceChannel.name}`);
     }
 
-    // Cria o jogo apenas quando houver exatamente 2 membros no canal
-    if (membersInCall.length === 2) {
-      if (guild.activeGame) return;
+    // Cria o jogo apenas quando houver exatamente 2 membros
+    if (membersInCall.length === 2 && !guild.activeGame) {
       guild.activeGame = true;
 
       // Embaralha os membros
@@ -41,8 +41,16 @@ module.exports = {
       const team1 = membersInCall.slice(0, middleIndex);
       const team2 = membersInCall.slice(middleIndex);
 
-      // Salva jogo no banco e obtém o gameNumber
-      const gameNumber = await db.addGame(team1, team2);
+      // Salva jogadores no banco caso não existam
+      for (const member of [...team1, ...team2]) {
+        await db.addUser(member.id, member.user.username);
+      }
+
+      // Salva jogo no banco e obtém gameNumber
+      const gameNumber = await db.addGame(
+        team1.map(m => ({ id: m.id, username: m.user.username })),
+        team2.map(m => ({ id: m.id, username: m.user.username }))
+      );
 
       // Cria canais de voz
       const voice1 = await guild.channels.create({
@@ -69,34 +77,14 @@ module.exports = {
         .setTitle(`🎮 JOGO #${gameNumber}`)
         .setColor(0x00AE86)
         .addFields(
-          { name: '🟦 Time 1', value: team1.map(m => `<@${m.id}>`).join('\n') || 'Nenhum jogador', inline: true },
-          { name: '🟥 Time 2', value: team2.map(m => `<@${m.id}>`).join('\n') || 'Nenhum jogador', inline: true }
+          { name: '🟦 Time 1', value: team1.map(m => `<@${m.id}>`).join('\n'), inline: true },
+          { name: '🟥 Time 2', value: team2.map(m => `<@${m.id}>`).join('\n'), inline: true }
         )
         .setFooter({ text: 'Boa sorte a todos!' });
 
       await textChannel.send({ embeds: [embed] });
 
       console.log(`Jogo #${gameNumber} criado com sucesso!`);
-
-      // Função de cleanup
-      const cleanup = async () => {
-        const remaining = Array.from(voiceChannel.members.values());
-        if (remaining.length === 0) {
-          guild.activeGame = false;
-          try {
-            await voice1.delete();
-            await voice2.delete();
-            await textChannel.delete();
-          } catch (err) {
-            console.error('Erro ao deletar canais do jogo:', err);
-          }
-          client.off('voiceStateUpdate', cleanupListener);
-        }
-      };
-
-      // Listener único para cleanup
-      const cleanupListener = (oldS, newS) => cleanup();
-      client.on('voiceStateUpdate', cleanupListener);
     }
   },
 };
