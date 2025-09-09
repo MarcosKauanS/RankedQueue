@@ -1,9 +1,11 @@
+// index.js
 require('dotenv').config();
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const Database = require('./database/Database');
 const { registerCommands } = require('./deploy-commands');
+const { createRolesIfNotExist } = require('./utils/createRoles');
 
 // Inicializa DB
 const db = new Database();
@@ -63,6 +65,20 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.replied) {
       await interaction.reply({ content: 'Ocorreu um erro ao executar o comando.', ephemeral: true });
     }
+  }
+});
+
+// Evento chamado quando o bot estiver pronto
+client.once('ready', async () => {
+  console.log(`🤖 Bot conectado como ${client.user.tag}`);
+
+  const guild = await client.guilds.fetch(GUILD_ID);
+
+  if (guild) {
+    console.log('⏳ Verificando cargos...');
+    await createRolesIfNotExist(guild);
+  } else {
+    console.error('❌ Não foi possível encontrar o servidor.');
   }
 });
 

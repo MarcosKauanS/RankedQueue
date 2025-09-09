@@ -1,7 +1,39 @@
 // database/Database.js
 const mysql = require('mysql2/promise');
 const { mysql: dbConfig } = require('../config/config');
-const tiers = require('../tiers'); // importa a tabela de tiers
+const tiers = require('../config/tiers');
+
+// Função auxiliar para atualizar cargo no Discord
+async function updateDiscordRole(client, guildId, discordId, elo) {
+  const guild = await client.guilds.fetch(guildId);
+  const member = await guild.members.fetch(discordId);
+
+  let playerTier = tiers[tiers.length - 1]; // maior tier por padrão
+  for (const tier of tiers) {
+    if (elo < tier.elo) break;
+    playerTier = tier;
+  }
+
+  // Remove cargos antigos
+  const tierNames = tiers.map(t => t.name);
+  const rolesToRemove = member.roles.cache.filter(r => tierNames.includes(r.name));
+  if (rolesToRemove.size > 0) {
+    await member.roles.remove(rolesToRemove);
+  }
+
+  // Adiciona cargo do tier atual
+  let role = guild.roles.cache.find(r => r.name === playerTier.name);
+  if (!role) {
+    role = await guild.roles.create({
+      name: playerTier.name,
+      color: playerTier.color || 'DEFAULT',
+      reason: 'Cargo de tier do RankedQueue',
+    });
+  }
+  await member.roles.add(role);
+
+  console.log(`🔄 ${member.user.tag} atualizado para o tier ${playerTier.name}`);
+}
 
 class Database {
   constructor() {
@@ -52,23 +84,16 @@ class Database {
     return rows[0];
   }
 
-  /**
-   * Atualiza os stats do jogador com base em vitória, derrota e MVP
-   * Calcula o ELO de acordo com o tier atual
-   * Retorna o novo elo
-   */
-  async updatePlayerStats(discordId, { vitoria = false, mvp = false, derrota = false }) {
+  async updatePlayerStats(discordId, { vitoria = false, mvp = false, derrota = false }, client = null, guildId = null) {
     const user = await this.getUser(discordId);
     if (!user) return;
 
-    // Determina o tier atual com base no ELO
     let currentTier = tiers[0];
     for (const tier of tiers) {
       if (user.elo >= tier.eloWin) currentTier = tier;
       else break;
     }
 
-    // Calcula ELO
     let eloChange = 0;
     if (vitoria) eloChange += currentTier.eloWin;
     if (mvp) eloChange += currentTier.eloMVP;
@@ -85,15 +110,17 @@ class Database {
       [newElo, wins, losses, games_played, mvps, discordId]
     );
 
+    if (client && guildId) {
+      await updateDiscordRole(client, guildId, discordId, newElo);
+    }
+
     return newElo;
   }
 
-  // Tabela de jogos
   async createGamesTable() {
     const query = `
       CREATE TABLE IF NOT EXISTS games (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        game_number INT NOT NULL UNIQUE,
         time1 JSON NOT NULL,
         time2 JSON NOT NULL,
         winner VARCHAR(10),
@@ -104,14 +131,16 @@ class Database {
     console.log('Tabela "games" criada ou já existe!');
   }
 
-  async addGame(gameNumber, time1, time2) {
-    const query = 'INSERT INTO games (game_number, time1, time2) VALUES (?, ?, ?)';
-    await this.connection.execute(query, [gameNumber, JSON.stringify(time1), JSON.stringify(time2)]);
+  // Adiciona um jogo e retorna o id gerado como gameNumber
+  async addGame(time1, time2) {
+    const query = 'INSERT INTO games (time1, time2) VALUES (?, ?)';
+    const [result] = await this.connection.execute(query, [JSON.stringify(time1), JSON.stringify(time2)]);
+    return result.insertId; // id gerado usado como gameNumber
   }
 
   async getGameByNumber(gameNumber) {
     const [rows] = await this.connection.execute(
-      'SELECT * FROM games WHERE game_number = ?',
+      'SELECT * FROM games WHERE id = ?',
       [gameNumber]
     );
     if (!rows[0]) return null;
@@ -123,7 +152,7 @@ class Database {
 
     return {
       id: rows[0].id,
-      game_number: rows[0].game_number,
+      game_number: rows[0].id,
       time1: parseJSONSafe(rows[0].time1),
       time2: parseJSONSafe(rows[0].time2),
       winner: rows[0].winner
@@ -132,14 +161,11 @@ class Database {
 
   async setGameWinner(gameNumber, winner) {
     await this.connection.execute(
-      'UPDATE games SET winner = ? WHERE game_number = ?',
+      'UPDATE games SET winner = ? WHERE id = ?',
       [winner, gameNumber]
     );
   }
 
-  /**
-   * Retorna o tier do jogador baseado no ELO atual
-   */
   getTierByElo(elo) {
     let tier = tiers[0];
     for (const t of tiers) {

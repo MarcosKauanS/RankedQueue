@@ -8,7 +8,6 @@ module.exports = {
     const CHANNEL_ID = config.CHANNEL_ID;
     const GUILD_ID = config.GUILD_ID;
 
-    // Ignora se não mudou de canal
     if (!oldState.channel && !newState.channel) return;
 
     const guild = client.guilds.cache.get(GUILD_ID);
@@ -27,8 +26,11 @@ module.exports = {
       console.log(`${oldState.member.user.tag} saiu do canal de voz ${voiceChannel.name}`);
     }
 
-    // Quando houver exatamente 2 membros, cria o jogo
+    // Cria o jogo apenas quando houver exatamente 2 membros no canal
     if (membersInCall.length === 2) {
+      if (guild.activeGame) return;
+      guild.activeGame = true;
+
       // Embaralha os membros
       for (let i = membersInCall.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -39,32 +41,30 @@ module.exports = {
       const team1 = membersInCall.slice(0, middleIndex);
       const team2 = membersInCall.slice(middleIndex);
 
-      // Número do jogo
-      if (!client.gameNumber) client.gameNumber = 1;
-      else client.gameNumber++;
-      const gameNumber = client.gameNumber;
+      // Salva jogo no banco e obtém o gameNumber
+      const gameNumber = await db.addGame(team1, team2);
 
-      // Cria canais de voz para cada time
+      // Cria canais de voz
       const voice1 = await guild.channels.create({
         name: `JOGO #${gameNumber} [Time 1]`,
-        type: ChannelType.GuildVoice
+        type: ChannelType.GuildVoice,
       });
       const voice2 = await guild.channels.create({
         name: `JOGO #${gameNumber} [Time 2]`,
-        type: ChannelType.GuildVoice
+        type: ChannelType.GuildVoice,
       });
 
-      // Move os membros para os canais de voz correspondentes
+      // Move membros
       for (const member of team1) await member.voice.setChannel(voice1);
       for (const member of team2) await member.voice.setChannel(voice2);
 
       // Cria canal de texto
       const textChannel = await guild.channels.create({
         name: `jogo-${gameNumber}`,
-        type: ChannelType.GuildText
+        type: ChannelType.GuildText,
       });
 
-      // Monta o embed bonitinho
+      // Monta embed
       const embed = new EmbedBuilder()
         .setTitle(`🎮 JOGO #${gameNumber}`)
         .setColor(0x00AE86)
@@ -74,14 +74,29 @@ module.exports = {
         )
         .setFooter({ text: 'Boa sorte a todos!' });
 
-      // Envia o embed no canal de texto
       await textChannel.send({ embeds: [embed] });
 
-      // Salva usuários no DB (se quiser)
-      await Promise.all(team1.map(m => db.addUser(m.id, m.user.username)));
-      await Promise.all(team2.map(m => db.addUser(m.id, m.user.username)));
-
       console.log(`Jogo #${gameNumber} criado com sucesso!`);
+
+      // Função de cleanup
+      const cleanup = async () => {
+        const remaining = Array.from(voiceChannel.members.values());
+        if (remaining.length === 0) {
+          guild.activeGame = false;
+          try {
+            await voice1.delete();
+            await voice2.delete();
+            await textChannel.delete();
+          } catch (err) {
+            console.error('Erro ao deletar canais do jogo:', err);
+          }
+          client.off('voiceStateUpdate', cleanupListener);
+        }
+      };
+
+      // Listener único para cleanup
+      const cleanupListener = (oldS, newS) => cleanup();
+      client.on('voiceStateUpdate', cleanupListener);
     }
-  }
+  },
 };
