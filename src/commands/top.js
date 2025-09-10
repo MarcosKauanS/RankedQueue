@@ -40,10 +40,7 @@ module.exports = {
 
           // Medalhas para top 3
           let medal;
-          if (rank === 1) medal = '🥇';
-          else if (rank === 2) medal = '🥈';
-          else if (rank === 3) medal = '🥉';
-          else medal = `**${rank}º**`;
+          medal = `**${rank}º**`;
 
           return `${medal} • **${player.username}** » \`${player.elo}\``;
         })

@@ -6,6 +6,7 @@ async function createRolesIfNotExist(guild) {
     const existingRoles = await guild.roles.fetch();
     const createdRoles = [];
 
+    // --- Criação dos cargos dos tiers ---
     for (const tier of tiers) {
       const roleExists = existingRoles.find(r => r.name === tier.name);
 
@@ -18,6 +19,17 @@ async function createRolesIfNotExist(guild) {
 
         createdRoles.push(newRole.name);
       }
+    }
+
+    // --- Criação do cargo Scorer ---
+    const scorerExists = existingRoles.find(r => r.name === 'Scorer');
+    if (!scorerExists) {
+      const scorerRole = await guild.roles.create({
+        name: 'Scorer',
+        color: 'Gold',
+        reason: 'Cargo necessário para comandos /scorar e /anular'
+      });
+      createdRoles.push(scorerRole.name);
     }
 
     if (createdRoles.length > 0) {

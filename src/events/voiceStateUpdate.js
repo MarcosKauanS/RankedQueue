@@ -28,7 +28,7 @@ module.exports = {
     }
 
     // Cria o jogo apenas quando houver exatamente 2 membros e não houver jogo ativo
-    if (membersInCall.length === 4 && !guild.activeGame) {
+    if (membersInCall.length === 2 && !guild.activeGame) {
       guild.activeGame = true;
 
       // Embaralha os membros
@@ -54,24 +54,33 @@ module.exports = {
 
       const everyoneRole = guild.roles.everyone;
 
-      // Cria canais de voz com permissão para todos verem, mas só membros do time podem falar
+      // Cria canal de voz Time 1
       const voice1 = await guild.channels.create({
         name: `JOGO #${gameNumber} [Time 1]`,
         type: ChannelType.GuildVoice,
         permissionOverwrites: [
-          { id: everyoneRole.id, allow: [PermissionFlagsBits.ViewChannel], deny: [PermissionFlagsBits.Speak, PermissionFlagsBits.Connect] },
+          { 
+            id: everyoneRole.id, 
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect],
+            deny: [PermissionFlagsBits.Speak] // todos podem entrar, mas não falar
+          },
           ...team1.map(m => ({
             id: m.id,
-            allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]
+            allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak] // membros do time podem falar
           }))
         ]
       });
 
+      // Cria canal de voz Time 2
       const voice2 = await guild.channels.create({
         name: `JOGO #${gameNumber} [Time 2]`,
         type: ChannelType.GuildVoice,
         permissionOverwrites: [
-          { id: everyoneRole.id, allow: [PermissionFlagsBits.ViewChannel], deny: [PermissionFlagsBits.Speak, PermissionFlagsBits.Connect] },
+          { 
+            id: everyoneRole.id, 
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect],
+            deny: [PermissionFlagsBits.Speak]
+          },
           ...team2.map(m => ({
             id: m.id,
             allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]
@@ -79,7 +88,7 @@ module.exports = {
         ]
       });
 
-      // Move membros
+      // Move membros para os canais
       for (const member of team1) await member.voice.setChannel(voice1);
       for (const member of team2) await member.voice.setChannel(voice2);
 

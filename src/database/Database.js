@@ -53,24 +53,26 @@ class Database {
 
   async createUsersTable() {
     const query = `
-      CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        discord_id VARCHAR(30) NOT NULL UNIQUE,
-        username VARCHAR(100) NOT NULL,
-        elo INT DEFAULT 0,
-        daily_elo INT DEFAULT 0,
-        wins INT DEFAULT 0,
-        losses INT DEFAULT 0,
-        games_played INT DEFAULT 0,
-        streak INT DEFAULT 0,
-        mvps INT DEFAULT 0,
-        camas INT DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
+    CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      discord_id VARCHAR(30) NOT NULL UNIQUE,
+      username VARCHAR(100) NOT NULL,
+      elo INT DEFAULT 0,
+      daily_elo INT DEFAULT 0,
+      wins INT DEFAULT 0,
+      losses INT DEFAULT 0,
+      games_played INT DEFAULT 0,
+      streak INT DEFAULT 0,
+      mvps INT DEFAULT 0,
+      camas INT DEFAULT 0,
+      strikes INT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
     await this.connection.query(query);
     console.log('Tabela "users" criada ou já existe!');
   }
+
 
   async addUser(discordId, username, elo = 0) {
     const query = 'INSERT IGNORE INTO users (discord_id, username, elo) VALUES (?, ?, ?)';
