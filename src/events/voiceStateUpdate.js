@@ -1,4 +1,4 @@
-const { ChannelType, EmbedBuilder } = require('discord.js');
+const { ChannelType, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
   name: 'voiceStateUpdate',
@@ -27,8 +27,8 @@ module.exports = {
       console.log(`${oldState.member.user.tag} saiu do canal de voz ${voiceChannel.name}`);
     }
 
-    // Cria o jogo apenas quando houver exatamente 2 membros
-    if (membersInCall.length === 2 && !guild.activeGame) {
+    // Cria o jogo apenas quando houver exatamente 2 membros e não houver jogo ativo
+    if (membersInCall.length === 4 && !guild.activeGame) {
       guild.activeGame = true;
 
       // Embaralha os membros
@@ -52,24 +52,48 @@ module.exports = {
         team2.map(m => ({ id: m.id, username: m.user.username }))
       );
 
-      // Cria canais de voz
+      const everyoneRole = guild.roles.everyone;
+
+      // Cria canais de voz com permissão para todos verem, mas só membros do time podem falar
       const voice1 = await guild.channels.create({
         name: `JOGO #${gameNumber} [Time 1]`,
         type: ChannelType.GuildVoice,
+        permissionOverwrites: [
+          { id: everyoneRole.id, allow: [PermissionFlagsBits.ViewChannel], deny: [PermissionFlagsBits.Speak, PermissionFlagsBits.Connect] },
+          ...team1.map(m => ({
+            id: m.id,
+            allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]
+          }))
+        ]
       });
+
       const voice2 = await guild.channels.create({
         name: `JOGO #${gameNumber} [Time 2]`,
         type: ChannelType.GuildVoice,
+        permissionOverwrites: [
+          { id: everyoneRole.id, allow: [PermissionFlagsBits.ViewChannel], deny: [PermissionFlagsBits.Speak, PermissionFlagsBits.Connect] },
+          ...team2.map(m => ({
+            id: m.id,
+            allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]
+          }))
+        ]
       });
 
       // Move membros
       for (const member of team1) await member.voice.setChannel(voice1);
       for (const member of team2) await member.voice.setChannel(voice2);
 
-      // Cria canal de texto
+      // Cria canal de texto apenas para membros do jogo
       const textChannel = await guild.channels.create({
         name: `jogo-${gameNumber}`,
         type: ChannelType.GuildText,
+        permissionOverwrites: [
+          { id: everyoneRole.id, deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+          ...[...team1, ...team2].map(m => ({
+            id: m.id,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+          }))
+        ]
       });
 
       // Monta embed

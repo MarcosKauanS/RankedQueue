@@ -165,13 +165,23 @@ class Database {
   }
 
   getTierByElo(elo) {
-    const sorted = tiers.sort((a, b) => a.elo - b.elo);
+    const sorted = [...tiers].sort((a, b) => a.elo - b.elo);
     let tier = sorted[0];
     for (const t of sorted) {
       if (elo >= t.elo) tier = t;
       else break;
     }
     return tier.name;
+  }
+
+  /**
+   * Retorna todos os jogadores registrados, ordenados pelo Elo (decrescente).
+   */
+  async getAllPlayersSortedByElo() {
+    const [rows] = await this.connection.execute(
+      'SELECT discord_id, username, elo FROM users ORDER BY elo DESC'
+    );
+    return rows;
   }
 }
 

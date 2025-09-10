@@ -1,9 +1,9 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
 const tiers = require('../config/tiers');
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('scorar')
+    .setName('pontuar')
     .setDescription('Define o time vencedor de um jogo de ranked')
     .addIntegerOption(option =>
       option.setName('game')
@@ -23,20 +23,27 @@ module.exports = {
         .setRequired(false)), // opcional caso ninguém seja MVP
 
   async execute(interaction, db) {
-    // Defer para evitar "Unknown interaction"
+    // 1️⃣ Verifica permissões/cargo
+    const member = interaction.member;
+    const scorerRole = member.roles.cache.find(r => r.name === 'Scorer');
+    if (!scorerRole && !member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return interaction.reply({ content: '❌ Você não tem permissão para usar este comando.', ephemeral: true });
+    }
+
+    // 2️⃣ Defer reply para evitar "Unknown interaction"
     await interaction.deferReply({ ephemeral: true });
 
     const gameNumber = interaction.options.getInteger('game');
     const vencedor = interaction.options.getString('vencedor');
-    const mvpUser = interaction.options.getUser('mvp'); // usuário MVP
+    const mvpUser = interaction.options.getUser('mvp');
 
     const jogo = await db.getGameByNumber(gameNumber);
-    if (!jogo) return interaction.editReply({ content: `Jogo #${gameNumber} não encontrado.` });
+    if (!jogo) return interaction.editReply({ content: `❌ Jogo #${gameNumber} não encontrado.` });
 
-    // --- Verifica se o jogo já foi scorado ---
+    // Verifica se já foi scorado
     if (jogo.winner) {
       return interaction.editReply({
-        content: `O jogo #${gameNumber} já foi registrado com vencedor: ${jogo.winner === 'time1' ? 'Time 1' : 'Time 2'}.`
+        content: `⚠️ O jogo #${gameNumber} já possui vencedor registrado: ${jogo.winner === 'time1' ? 'Time 1' : 'Time 2'}.`
       });
     }
 
@@ -44,9 +51,10 @@ module.exports = {
     const timePerdedor = vencedor === 'time1' ? jogo.time2 : jogo.time1;
 
     if (!Array.isArray(timeVencedor) || !Array.isArray(timePerdedor)) {
-      return interaction.editReply({ content: 'Erro: os times do jogo estão inválidos.' });
+      return interaction.editReply({ content: '❌ Erro: os times do jogo estão inválidos.' });
     }
 
+    // Função para atualizar jogador
     const atualizarJogador = async (player, vitoria = false, derrota = false, mvp = false) => {
       if (!player?.id) return;
 
@@ -82,12 +90,12 @@ module.exports = {
     // Define vencedor do jogo
     await db.setGameWinner(gameNumber, vencedor);
 
-    // Envia mensagem final
+    // Mensagem final
     await interaction.editReply({
       content: `🏆 Resultado registrado para o jogo #${gameNumber}!\n**Vencedores:** ${timeVencedor.map(p => `<@${p.id}>`).join(', ')}\n**Perdedores:** ${timePerdedor.map(p => `<@${p.id}>`).join(', ')}${mvpUser ? `\n🌟 MVP: <@${mvpUser.id}>` : ''}`
     });
 
-    // --- Cleanup dos canais após 3 segundos ---
+    // Remove canais do jogo após 3 segundos
     setTimeout(async () => {
       try {
         const voice1 = interaction.guild.channels.cache.find(c => c.name === `JOGO #${gameNumber} [Time 1]`);
