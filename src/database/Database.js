@@ -42,14 +42,26 @@ class Database {
   }
 
   async connect() {
-    try {
-      this.connection = await mysql.createConnection(dbConfig);
-      console.log('Conectado ao MySQL com sucesso!');
-    } catch (err) {
-      console.error('Erro ao conectar ao MySQL:', err);
-      process.exit(1);
+    let attempts = 0;
+    const maxRetries = 10;
+    const delay = 3000; // 3 segundos
+
+    while (attempts < maxRetries) {
+        try {
+            this.connection = await mysql.createConnection(dbConfig);
+            console.log('Conectado ao MySQL com sucesso!');
+            return this.connection;
+        } catch (err) {
+            attempts++;
+            console.log(`Tentativa ${attempts} falhou: ${err.code || err.message}`);
+            if (attempts >= maxRetries) {
+                console.error('Não foi possível conectar ao MySQL após várias tentativas.');
+                process.exit(1);
+            }
+            await new Promise(res => setTimeout(res, delay));
+        }
     }
-  }
+}
 
   async createUsersTable() {
     const query = `
